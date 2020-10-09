@@ -1,0 +1,83 @@
+import numpy as np #librería en la que se define un tipo de dato que representa matrices multidimensionales
+# además incluye algunas funcionalidades básicas para trabajar con ellas
+
+import os  #libreria para el acceso portable a funciones específicas del sistema operativo
+import cv2 #OpenCV es una biblioteca libre de visión artificial originalmente desarrollada por Intel
+
+import matplotlib.pyplot as plt        ## libreria utilizada para graficar
+from sklearn.mixture import GaussianMixture as GMM # Libreria que contiente el metodo GMM de clustering
+from sklearn.cluster import KMeans # Libreria que contiente el metodo KMeans de clustering
+from sklearn.utils import shuffle
+
+
+## funcion para recrear la imagen cuando tengamos los parametros de los cluster
+def recreate_image(centers, labels, rows, cols):
+    d = centers.shape[1]
+    image_clusters = np.zeros((rows, cols, d))
+    label_idx = 0
+    for i in range(rows):
+        for j in range(cols):
+            image_clusters[i][j] = centers[labels[label_idx]]  # dependiendo de la posicion del  pixel se le asigna el color
+                                                               # del centro del cluster correspondiente
+            label_idx += 1
+    return image_clusters
+
+
+if __name__ == '__main__':
+    print('Ingrese ruta de la imagen(agregue al final el nombre de su imagen con su formato):')
+    print('Por ejemplo:  C:/Users/Steven/Documents/8 semestre/Procesamiento de imagenes/bandera.png:  ')
+
+    dir = input()        # se guarda la direccion de la imagen a procesar
+
+    print('Elija el metodo (kmeans o gmm):')
+    metodo=input()        # se guarda el tipo de metodo a realizar
+
+    image = cv2.imread(dir)        # se almacena la imagen
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # se cambia el orden de BGR a RGB
+
+    suma=np.zeros(10)             # se crea un vector donde se guardaran la suma de distancias intra-cluster
+                                  # para numero de colores de 1 a 10
+
+
+    image = np.array(image, dtype=np.float64) / 255   # convertimos la imagen para que tenga un rango entre 0-1 y la convertimos en
+                                                      #tipo de dato flotante para ser trabajada con la libreria matplotlib
+
+    for n_colors in range(10):                # se recorren los diferentes numeros de colores o numero de clusters
+
+        #covertimos la imagen a formato 2D
+        rows, cols, ch = image.shape
+        assert ch == 3
+        image_array = np.reshape(image, (rows * cols, ch))
+
+        print("Ajuste del modelo en una pequeña submuestra de datos, n_colors=",n_colors+1)
+
+        image_array_sample = shuffle(image_array, random_state=0)[:10000]
+
+        # Dependiendo del tipo de clustering se encuentra el modelo
+        if metodo == 'gmm':
+            model = GMM(n_components=n_colors+1).fit(image_array_sample)
+        else:
+            model = KMeans(n_clusters=n_colors+1, random_state=0).fit(image_array_sample)
+
+        # Se encuentran las etiquetas para cada pixel
+        print("Encontrando las etiquetas de cluster para cada pixel, n_colors=",n_colors+1)
+        if metodo == 'gmm':
+            labels = model.predict(image_array)
+            centers = model.means_
+        else:
+            labels = model.predict(image_array)
+            centers = model.cluster_centers_
+
+        recreada=recreate_image(centers, labels, rows, cols)  # se recrea la imagen salida del clustering
+        resta=np.absolute(recreada.astype(float)-image.astype(float))  # Encontramos la diferencia de cada color en cada posicion
+        suma[n_colors]=np.sum(resta[:,:,0]+resta[:,:,1]+resta[:,:,2])  # sumamos las diferencias de los colores RGB
+
+    x = np.arange(10)+1 # se crea un vector con los numeros de colores o clusters que se analizaron
+
+    #Se grafica (suma de distancias intra-cluster vs n_color)
+    plt.plot(x,suma, label=metodo)
+    plt.xlabel('N_color')
+    plt.ylabel('Suma de distancias intra-cluster')
+    plt.title("suma de distancias intra-cluster vs n_color(Escalas de color de imagen 0-1)")
+    plt.legend()
+    plt.show()
