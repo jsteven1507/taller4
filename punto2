@@ -1,0 +1,126 @@
+import numpy as np #librería en la que se define un tipo de dato que representa matrices multidimensionales
+# además incluye algunas funcionalidades básicas para trabajar con ellas
+
+
+import cv2 #OpenCV es una biblioteca libre de visión artificial originalmente desarrollada por Intel
+
+puntos= [[0,0],[0,0],[0,0]]
+def on_mouse(event, x, y, flags, param):
+    global cuenta
+    global salir
+    global puntos
+
+    pt = (x, y)
+
+    #cuando se suelte el click del mouse
+    if event == cv2.EVENT_LBUTTONUP:
+
+        #dibuja el punto en nuestra matriz en ceros
+        cv2.circle(param, pt, 1, (255, 255, 255), -1)
+        puntos[cuenta]=list(pt) # se guardadan las posiciones de los puntos
+
+        #solo se permite seleccionar 3 puntos
+        if cuenta < 2:
+            cuenta=cuenta+1
+            salir=0
+        else:
+            salir=1
+            cuenta = 0
+
+
+if __name__ == "__main__":
+
+    print('Ingrese ruta de la imagen 1 (agregue al final el nombre de su imagen con su formato):')
+
+    print('Por ejemplo:  C:/Users/Steven/Documents/8 semestre/Procesamiento de imagenes/lena.png:  ')
+    dir1 = input()  # se guarda la direccion de la imagen 1 a procesar
+
+    print('Ingrese ruta de la imagen 2 (agregue al final el nombre de su imagen con su formato):')
+    print('Por ejemplo:  C:/Users/Steven/Documents/8 semestre/Procesamiento de imagenes/lena_warped.png:  ')
+
+    dir2 = input()  # se guarda la direccion de la imagen 2 a procesar
+
+    image1 = cv2.imread(dir1)  # se almacena la imagen 1
+    image2 = cv2.imread(dir2)  # se almacena la imagen 2
+
+
+    #  se seleccionan con el mouse tres puntos de la imagen 1
+    title = 'Imagen1'
+    image = np.zeros(image1.shape, np.uint8)
+    cv2.namedWindow(title)
+    cv2.setMouseCallback(title, on_mouse, image)
+    cuenta=0
+    salir=0
+    while (salir==0):
+        cv2.imshow(title, image1)
+        if  cv2.waitKey(20) & 0xFF == 27 :
+            break
+    puntos1=puntos
+    puntos1=puntos1.copy()
+    cv2.destroyAllWindows()
+    cv2.imshow(title, image)
+
+    #  se seleccionan con el mouse tres puntos de la imagen 2
+    title = 'Imagen2'
+
+    image = np.zeros(image2.shape, np.uint8)
+    cv2.namedWindow(title)
+    cv2.setMouseCallback(title, on_mouse, image)
+    cuenta = 0
+    salir = 0
+    while (salir == 0):
+        cv2.imshow(title, image2)
+        if cv2.waitKey(20) & 0xFF == 27 :
+            break
+    puntos2 = puntos
+    cv2.destroyAllWindows()
+    cv2.imshow(title, image)
+    cv2.waitKey(0)
+
+    # Transformacion afin
+    rows, cols, ch = image1.shape
+    print(puntos1)
+    print(puntos2)
+    pts1 = np.float32(puntos1)
+    pts2 = np.float32(puntos2)
+    pts1 = np.float32(pts1)
+    pts2 = np.float32(pts2)
+    M_affine = cv2.getAffineTransform(pts1,pts2)
+    image_affine = cv2.warpAffine(image1, M_affine,(cols,rows))
+    cv2.imshow('Imagen_affine', image_affine)
+    cv2.waitKey(0)
+    print(M_affine)# matriz de transformacion afin
+
+    # Se encuentran los parametros de escalamiento(sx,sy),rotacion(theta) y translacion(tx,ty) apartir de la matriz M_affine
+    sa = np.sqrt((M_affine[0, 0] ** 2) + (M_affine[1, 0] ** 2))
+    sb = np.sqrt((M_affine[0, 1] ** 2) + (M_affine[1, 1] ** 2))
+    theta = -np.arctan(M_affine[0, 1] / M_affine[1, 1])
+    ta = (M_affine[0, 2] * np.cos(theta) - M_affine[1, 2] * np.sin(theta)) / sa
+    tb = (M_affine[0, 2] * np.sin(theta) + M_affine[1, 2] * np.cos(theta)) / sb
+
+    #theta=(theta*180)/np.pi
+
+    print("s0   =", sa)
+    print("s1   =", sb)
+    print("theta=",theta)
+    print("t0   =", ta)
+    print("t1   =", tb)
+
+     # Transformacion similar (obtenida de aproximacion con los parametros de transformacion encontrados anteriormente
+    M_sim = np.float32([[sa * np.cos(theta), -np.sin(theta), ta],
+                         [np.sin(theta), sa * np.cos(theta), ta]])
+    image_simi = cv2.warpAffine(image1, M_sim, image1.shape[:2])
+    cv2.imshow('Imagen_simi', image_simi)
+
+    #Distancia l1 entre los puntos seleccionados
+    r1= np.absolute((image_simi[pts1[0].astype(int)]).astype(float)-(image2[pts2[0].astype(int)]).astype(float))
+    r2 = np.absolute((image_simi[pts1[1].astype(int)]).astype(float) - (image2[pts2[1].astype(int)]).astype(float))
+    r3 = np.absolute((image_simi[pts1[2].astype(int)]).astype(float) - (image2[pts2[2].astype(int)]).astype(float))
+    suma = np.sum(r1[:, :, 0] + r1[:, :, 1] + r1[:, :, 2])
+    l1_p=np.sum(suma)
+
+    #Norma l1 de la diferencia de las imagenes de transformacion de similitud con la imagen 2
+    l1_n=np.linalg.norm((image_simi-image2))
+    print("Distancia l1 de los tres puntos",l1_p)
+    print("Norma l1 resta de imagenes     ",l1_n)
+    cv2.waitKey(0)
